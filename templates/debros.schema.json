@@ -1,0 +1,164 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/DeBrosDAO/rules/main/templates/debros.schema.json",
+  "title": "debros.json",
+  "description": "Per-project metadata + rules tracking for projects adopting DeBros Engineering Rules.",
+  "type": "object",
+  "required": ["schema_version", "rules", "project"],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "description": "Version of this JSON schema itself. Bumped on breaking changes to the schema.",
+      "const": 1
+    },
+    "rules": {
+      "type": "object",
+      "description": "Which version of the rules repo this project is synced against.",
+      "required": ["version", "sha", "synced_at"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Semver tag, e.g. v1.2.0",
+          "pattern": "^v\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.-]+)?$"
+        },
+        "sha": {
+          "type": "string",
+          "description": "Git SHA of the rules-repo commit this is pinned to.",
+          "pattern": "^[a-f0-9]{7,40}$"
+        },
+        "synced_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of the last sync."
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "required": ["name", "type", "languages"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable project name."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["service", "library", "sdk", "cli", "web", "mobile", "infrastructure", "other"]
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "typescript",
+              "javascript",
+              "go",
+              "python",
+              "rust",
+              "ruby",
+              "java",
+              "kotlin",
+              "swift",
+              "objective-c",
+              "react-native",
+              "zig",
+              "c",
+              "cpp",
+              "other"
+            ]
+          }
+        },
+        "critical_paths": {
+          "type": "array",
+          "description": "File globs the AI agent must treat as high-stakes (auth, crypto, payment, deploy).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deploy_targets": {
+          "type": "array",
+          "description": "Environment names this project deploys to.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "owner": {
+          "type": "string",
+          "description": "Contact for the team/person owning this project."
+        }
+      }
+    },
+    "compliance": {
+      "type": "object",
+      "properties": {
+        "last_audit": {
+          "type": "string",
+          "format": "date",
+          "description": "Date of last manual compliance audit (YYYY-MM-DD)."
+        },
+        "exceptions": {
+          "type": "array",
+          "description": "Explicit waivers of specific rules. Each MUST have a reason and expiry.",
+          "items": {
+            "type": "object",
+            "required": ["rule", "reason", "expires"],
+            "properties": {
+              "rule": {
+                "type": "string",
+                "description": "The rule being waived, e.g. minimumReleaseAge, ignoreScripts."
+              },
+              "scope": {
+                "type": "string",
+                "description": "Where the waiver applies, e.g. a specific package or file."
+              },
+              "reason": {
+                "type": "string"
+              },
+              "approved_by": {
+                "type": "string"
+              },
+              "expires": {
+                "type": "string",
+                "format": "date"
+              }
+            }
+          }
+        },
+        "dismissed": {
+          "type": "array",
+          "description": "Tier-1 findings the user has dismissed. Tracked to escalate to Tier-2 nag after 3 dismissals.",
+          "items": {
+            "type": "object",
+            "required": ["finding", "dismissed_count", "last_dismissed"],
+            "properties": {
+              "finding": { "type": "string" },
+              "dismissed_count": { "type": "integer" },
+              "last_dismissed": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "tier3_overrides": {
+          "type": "array",
+          "description": "Explicit overrides of Tier-3 blocks. Each is a security-critical decision and must be reviewed.",
+          "items": {
+            "type": "object",
+            "required": ["block", "reason", "approved_by", "timestamp"],
+            "properties": {
+              "block": { "type": "string" },
+              "reason": { "type": "string" },
+              "approved_by": { "type": "string" },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+    "ai_agent_notes": {
+      "type": "array",
+      "description": "Free-form notes the AI agent reads at session start. Use for project-specific quirks not covered by the universal rules.",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

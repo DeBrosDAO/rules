@@ -1,0 +1,42 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DeBrosDAO/rules/main/templates/debros.schema.json",
+  "schema_version": 1,
+
+  "rules": {
+    "version": "v0.1.0",
+    "sha": "REPLACE_WITH_RULES_REPO_COMMIT_SHA",
+    "synced_at": "2026-05-12T00:00:00Z"
+  },
+
+  "project": {
+    "name": "example-project",
+    "type": "service",
+    "languages": ["typescript"],
+    "critical_paths": [
+      "src/auth/**",
+      "src/crypto/**"
+    ],
+    "deploy_targets": ["staging", "production"],
+    "owner": "team-name@example.com"
+  },
+
+  "compliance": {
+    "last_audit": "2026-05-12",
+    "exceptions": [
+      {
+        "rule": "minimumReleaseAge",
+        "scope": "package:some-critical-cve-fix@1.2.4",
+        "reason": "patches CVE-2026-1234 actively exploited",
+        "approved_by": "alice@example.com",
+        "expires": "2026-06-12"
+      }
+    ],
+    "dismissed": [],
+    "tier3_overrides": []
+  },
+
+  "ai_agent_notes": [
+    "This project deploys via GitOps — manual deploys are forbidden",
+    "Database migrations are gated by team review — no AI-driven schema changes"
+  ]
+}
