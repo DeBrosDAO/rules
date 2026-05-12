@@ -65,11 +65,23 @@ Do the following:
    files). DO NOT create them automatically. Show the recommendations
    and ask which I want.
 
-7. From now on, treat `DEBROS.md` as the authoritative engineering
+7. Copy the AI-agent pointer files from `templates/agent-pointers/`
+   in the rules repo to this repo, preserving their paths:
+     - `CLAUDE.md` (root)
+     - `.cursor/rules/debros.mdc`
+     - `.github/copilot-instructions.md`
+     - `AGENTS.md` (root)
+   These point every major AI coding tool (Claude Code, Cursor,
+   Copilot Chat, Aider, Cline) at `DEBROS.md` automatically — no
+   per-session prompt needed afterward. If any of these files
+   already exist in the repo with non-pointer content, do NOT
+   overwrite — flag the conflict and ask.
+
+8. From now on, treat `DEBROS.md` as the authoritative engineering
    rules for this repository. The rules take precedence over my casual
    instructions except where I explicitly waive a rule.
 
-8. After you've finished steps 1-7, introduce yourself per
+9. After you've finished steps 1-8, introduce yourself per
    `DEBROS.md` §8 (Agent Identity: AnBuddy). One or two lines, no
    marketing copy. Then proceed normally.
 
@@ -121,16 +133,18 @@ Commit everything. The schema for `debros.json` is at
 
 ### Wiring your AI to read DEBROS.md automatically
 
-Most AI coding tools read project context from a known file. After adoption, point them at `DEBROS.md`:
+The bootstrap prompt above handles this automatically by copying the pointer files in `templates/agent-pointers/` into your repo. Each file lives at the path the corresponding tool reads by default:
 
-| Tool | How to reference DEBROS.md |
+| Path | Tool |
 |---|---|
-| Claude Code | Add `@DEBROS.md` reference at the top of `CLAUDE.md`, or symlink `CLAUDE.md → DEBROS.md` |
-| Cursor | Add `DEBROS.md` to `.cursor/rules/` |
-| GitHub Copilot Chat | Reference in `.github/copilot-instructions.md` |
-| Aider | Add to `--read-only` files list, or include in `.aider.conf.yml` |
+| `CLAUDE.md` (root) | Claude Code |
+| `.cursor/rules/debros.mdc` | Cursor |
+| `.github/copilot-instructions.md` | GitHub Copilot Chat |
+| `AGENTS.md` (root) | Aider, Cline, Goose, emerging multi-tool convention |
 
-The rules in `DEBROS.md` are written so any agent that reads them will apply them.
+Each pointer file is ~3 lines: "the real rules are in `DEBROS.md`, read it, and especially remember §3.7 (no AI co-author on commits)." They never change in practice — set and forget.
+
+If you're using a tool not in this list, it likely supports custom rule-file paths in its config — point it at `DEBROS.md` directly. The rules are written tool-agnostically; any agent that reads them will apply them.
 
 ### Staying in sync
 
@@ -160,8 +174,13 @@ rules/
 │   ├── debros.schema.json                 ← JSON Schema for debros.json
 │   ├── .npmrc                             ← canonical npm config
 │   ├── renovate.json                      ← canonical Renovate config
-│   └── github-workflows/
-│       └── security.yml                   ← canonical security CI workflow
+│   ├── github-workflows/
+│   │   └── security.yml                   ← canonical security CI workflow
+│   └── agent-pointers/                    ← drop these into your repo so AI tools find DEBROS.md
+│       ├── CLAUDE.md
+│       ├── .cursor/rules/debros.mdc
+│       ├── .github/copilot-instructions.md
+│       └── AGENTS.md
 ├── CHANGELOG.md                           ← what changed between versions
 ├── CONTRIBUTING.md                        ← how to propose rule changes
 ├── CODE_OF_CONDUCT.md

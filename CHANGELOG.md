@@ -8,6 +8,29 @@ Pin your project to a specific version via `debros.json.rules.version`. The AI a
 
 ## [Unreleased]
 
+## [v0.2.0] — 2026-05-12
+
+### Added
+
+- `templates/agent-pointers/` — drop-in pointer files for every major AI
+  coding tool (Claude Code, Cursor, GitHub Copilot Chat, Aider/Cline/Goose
+  via `AGENTS.md`). Each is ~3 lines that point the tool at the canonical
+  `DEBROS.md` and remind it of §3.7 (no AI co-author on commits).
+- Bootstrap prompt in README now includes step 7: copy the pointer files
+  into the adopted repo so AI tools find `DEBROS.md` without per-session
+  setup.
+- README "Wiring your AI" section rewritten to describe the pointer-file
+  pattern instead of asking adopters to hand-wire each tool.
+- README "Repository structure" updated to show `templates/agent-pointers/`.
+
+### Rationale
+
+There's no universal "AI agents read this file" convention. Each tool
+looks in its own place by default. v0.1.0 left adoption-of-the-rules
+to the user (paste the bootstrap prompt every session). v0.2.0 closes
+that gap by establishing a pointer-file convention that works with the
+defaults every major tool already uses.
+
 ## [v0.1.0] — 2026-05-12
 
 Initial public release. Expect breaking changes before v1.0.
@@ -38,5 +61,6 @@ Initial public release. Expect breaking changes before v1.0.
 
 ---
 
-[Unreleased]: https://github.com/DeBrosDAO/rules/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/DeBrosDAO/rules/compare/v0.2.0...HEAD
+[v0.2.0]: https://github.com/DeBrosDAO/rules/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/DeBrosDAO/rules/releases/tag/v0.1.0
