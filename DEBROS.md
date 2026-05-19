@@ -209,6 +209,7 @@ The following operations require explicit human approval in the chat, never infe
 
 - Any deploy, rollout, or restart of production services
 - `git push --force`, `git reset --hard`, `git rebase` on shared branches
+- **Operations that rewrite, graft, or import git history**: `git filter-repo`, `git filter-branch`, `git replace --graft`, `git subtree add` from an external repo, force-push that alters the merge-base. These trigger §10.5's history-rescan obligation and MUST surface to the human before running, not after.
 - Deleting files, branches, tables, or rows
 - Modifying CI workflows that gate releases
 - Bumping major versions of dependencies
@@ -216,6 +217,8 @@ The following operations require explicit human approval in the chat, never infe
 - Database migrations that are not backwards-compatible
 
 The agent MUST also state what the operation does and what its consequences are before asking for approval.
+
+**No self-approval for history-rewriting operations.** History rewrites permanently alter the immutable record both `git blame` and `gitleaks` depend on — the same shape of structural-guarantee removal §10.0 attaches a no-self-approval rule to for `tier3_overrides[]`. For the history-rewriting subset of the list above (`git filter-repo`, `git filter-branch`, `git replace --graft`, `git subtree add`, force-push altering the merge-base), the approving human MUST be distinct from the PR author and from any agent operating on the author's behalf. In solo-maintainer setups the external-attestation path from §10.0 applies: a public CVE/CWE advisory ID, a referenced security consultant's report, or equivalent retrievable artifact MUST be logged in the matching `compliance.exceptions[]` entry, subject to the same evidence-anchor and no-self-approval rules §10.0 imposes on `tier3_overrides[]`. A self-approved history rewrite is non-compliant; permanent alteration of the commit graph requires an independent witness.
 
 ### 3.4 No bypassing safety tooling
 
@@ -255,6 +258,42 @@ Commits are attributed to the human who reviewed and approved them. The agent's 
 
 Rationale: git history is the human record of decisions. Polluting it with AI attribution makes `git blame` noisier, complicates legal/audit reviews, and signals nothing useful (everyone uses AI tools now). When you `git log`, you want to see who decided to ship this change, not which model wrote the first draft.
 
+### 3.8 No environment disclosure in commit messages or PRs
+
+When the agent generates text destined for a public repository — commit messages, PR descriptions, release notes, issue comments — it strips signals that identify the maintainer's development environment beyond what the artifact itself requires. Specifically:
+
+- **No absolute filesystem paths.** Use relative paths, `<target>`, or `/path/to/repo` placeholders. `C:\Users\<name>\…` or `/home/<name>/…` reveal the operating user; `c:\dev\<repo>\…` or `~/projects/<repo>/…` reveal folder conventions. Both end up permanently in public commit history.
+- **No OS or shell mentions unless they are user-facing compatibility requirements.** "Tested on Windows 11 with Git-Bash and PowerShell 7" leaks the development environment. "`bootstrap.ps1` requires PowerShell 7+" stays — it's a runtime requirement future users need.
+- **No shell prompts in pasted output.** `user@hostname:~/proj $` lines reveal username, hostname, and working directory. Strip the prompt, keep the command and the output.
+- **No first-person voice in agent-generated text.** Prefer impersonal phrasing ("this was missed during delivery") over personal ("I missed that"). Personal voice is appropriate in chat transcripts and human-written prose; it is not appropriate in artifacts the agent drafts on the human's behalf.
+
+This is a distinct concern from §3.5 (no secrets in prompts). §3.5 covers credential leakage; §3.8 covers identity and environment leakage, which is harder to undo because the leak lives in public commit history rather than in a rotatable credential. The agent self-applies this rule when drafting any text destined for public commit history or PR threads. When the same change also triggers §4's sub-agent review (e.g. it includes a code change), the reviewers verify the agent-drafted prose as part of their pass.
+
+### 3.9 Verify external references against upstream
+
+When the agent writes **or reviews** prose that references an external tool's command-line invocation, configuration syntax, file format, version pin, or HTTP API endpoint — whether the prose is the agent's own draft or pre-existing in the artifact under review — it verifies the reference against the tool's current upstream documentation before submitting (for new prose) or approving (for review). The minimum check is a fetch of the tool's official README or docs page; for security-sensitive tools, the version-tagged docs for the version the project pins.
+
+Reviewing pre-existing references is the higher-leverage case: drift accumulates silently in CI workflows, READMEs, and compliance docs. An agent reviewing a PR that touches a workflow file, or auditing a repo at adoption time, MUST sweep the references it encounters — not just the ones in its own diff.
+
+Specifically:
+
+- **Command-line invocations.** `gitleaks git --staged`, `npm audit --omit=dev`, `cargo audit`, `pip-audit`, etc. — confirm the subcommand and flags are not deprecated, renamed, or removed.
+- **Configuration file syntax.** `.npmrc` keys, `renovate.json` schema, `gitleaks.toml` rules, `pyproject.toml` sections — confirm the key names and value formats match the tool's current schema.
+- **HTTP API endpoints.** REST paths, request bodies, response shapes — confirm against the API's current OpenAPI spec or docs.
+- **External version pins** (GitHub Actions, container images, third-party libraries used as illustrative examples). Confirm the pinned version is still upstream-supported; don't ship `actions/foo@v1` when `v3` is current.
+
+**Invariant: the verification log must be spot-checkable without re-doing the verification.** A log entry containing only a URL and a date asks the downstream reviewer to either re-fetch every reference (defeating the log's purpose) or trust the log on faith (violating §10.0). Each entry MUST therefore include an evidence anchor — a commit SHA, version tag, or one-line quoted excerpt from the upstream — that the reviewer can spot-check against the URL.
+
+Format, per external reference, in the PR description:
+
+> `<tool> <command>` verified against [<tool> README at &lt;commit-sha-or-version-tag&gt;]( ) on YYYY-MM-DD — anchor: &lt;one-line excerpt or quoted fact from upstream that confirms the claim&gt;
+
+The anchor field is mandatory. The summary lets a human reviewer (or §4 sub-agents, when the change otherwise triggers §4) audit the verification quickly — *with* the anchor, the reviewer can confirm against the linked URL without re-running the fetch; *without* the anchor, every entry is an unfalsifiable claim.
+
+This rule is strongest for documentation and weakest for code. In code, a deprecated symbol usually fails at compile, lint, or test time — loud failure. In documentation, a deprecated command silently misleads adopters until someone runs it and discovers it doesn't work — quiet failure that scales out to every adopter. Documentation MUST be verified; code SHOULD be verified.
+
+**Cutoff caveat + verification methodology.** The agent's training data has a knowledge cutoff. References written from memory may reflect deprecated syntax. WebFetch (or the agent's equivalent live-fetch tool) is the canonical verification path; relying on training-data recall alone for prose that ships to adopters violates this rule. When verifying a pattern-based reference (a regex, sed pattern, command-flag claim, or any rule that depends on what input it processes), trace the pattern against a concrete example input before reporting a finding against it. If you cannot confirm the failure or success case from observable behavior, label the finding "speculative — needs human verification" rather than asserting it confidently. This applies both to original drafting and to review of others' drafts.
+
 ---
 
 ## 4. Sub-Agent Review
@@ -268,7 +307,9 @@ For any non-trivial code change, two sub-agents review the work in parallel befo
 - Touches authentication, cryptography, secrets, payment, concurrency, distributed state, OR
 - Modifies database migrations, OR
 - Modifies CI workflows or deploy scripts, OR
-- Adds a new dependency
+- Adds a new dependency, OR
+- Modifies any `debros.json` field that determines how a security rule is enforced (e.g. `project.public_routes[]`, `compliance.tier3_overrides[]`, `compliance.exceptions[]`) — regardless of line count. Such edits change the enforcement surface itself, not just the code being enforced; sub-agent review applies independent of diff size. See §10.0 for the trust model and §10.2 for the specific case of `public_routes[]`, OR
+- Contains a §10.5 post-rewrite scan artifact OR includes a commit produced by a history-rewriting operation listed in §3.3 — regardless of line count. History rewrites + their scan artifacts share `tier3_overrides[]`'s severity (permanent alteration of immutable state); the sub-agent review obligation is symmetric. Pre-flight approval lives in §3.3 (no self-approval); post-flight review lives here.
 
 **Not required** for:
 - Typo fixes
@@ -436,6 +477,177 @@ If you're adopting these rules in a non-DeBros org and want your own persona: ed
 This file is versioned via the `rules` repository's git tags (semver: `v1.2.3`). Breaking changes to the schema of `debros.json` or to the meaning of Tier-3 blocks require a major version bump. Adding rules is a minor bump. Editorial changes are patch bumps.
 
 Projects pin to a specific version via `debros.json.rules.version`. The agent surfaces newer versions on session start but never auto-upgrades.
+
+---
+
+## 10. Application Security
+
+These rules govern how application code handles untrusted inputs, secrets, and identity. Language-agnostic where possible; per-language and per-framework implementation details live in `compliance/<language>.md` and `compliance/web-service.md`.
+
+### 10.0 Trust model for security-critical configuration
+
+Per §3.2, the agent's output is untrusted. That stance applies to **all** security-critical configuration the agent writes or edits, including: `debros.json.project.public_routes[]`, `debros.json.compliance.tier3_overrides[]`, `debros.json.compliance.exceptions[]`, the §3.9 verification log, and the `.env.example` placeholders.
+
+A human or sub-agent reviewer reading a change to any of those entries MUST verify the entry against the rule it claims to satisfy, independent of the agent's stated rationale. Sub-agent review or human verification is the canonical enforcement mechanism for §10; agent self-reporting alone is not sufficient. The §4.1 trigger list calls out the relevant configuration edits explicitly so review is forced regardless of line count.
+
+**Exception for `tier3_overrides[]`.** Entries in `debros.json.compliance.tier3_overrides[]` REMOVE a structural guarantee — they disable a Tier-3 block — and therefore require **explicit human approval** logged in the PR (a reviewer comment, a `Signed-off-by:` trailer, or equivalent attestation). Sub-agent review may accompany the human approval but does not substitute for it. A fully agent-internal review chain (orchestrator → sub-agents → orchestrator sanity-check) is insufficient for this class of edit because every layer of that chain is still agent output reviewing agent output per §3.2.
+
+**No self-approval.** The approving human MUST be distinct from the PR author and from any agent operating on the author's behalf. In a multi-human team this is satisfied by review from a second contributor with merge rights. In a solo-maintainer or single-developer setup — where second-human review is structurally impossible — the override entry MUST instead carry an external attestation logged in the matching `compliance.exceptions[]` entry. A self-approved `tier3_overrides[]` entry is non-compliant; the structural-guarantee removal must be witnessed by someone whose judgment is independent of the agent that drafted it.
+
+**Evidence anchor on external attestations.** The external-attestation entry MUST itself satisfy §3.9's evidence-anchor pattern: a public URL or published reference whose content can be retrieved and spot-checked by a downstream reviewer. Acceptable: a consultant's published-report URL with version or commit pin; a public CVE/CWE advisory ID; a documented vendor recommendation with publication date and retrievable source; a referenced public discussion thread with archive link. **Not acceptable:** a free-text reason field, a private email reference, "Mandiant recommended this" without a retrievable artifact, or any anchor whose content the reviewer would have to take on faith. A fabricated attestation that looks plausible but cannot be retrieved is the failure mode this clause exists to prevent — it reintroduces the unfalsifiable-claim pattern §3.9's anchor requirement closed for verification logs.
+
+`public_routes[]` and `exceptions[]` entries may rely on sub-agent review subject to §10.2's forbidden-patterns subrule and the §4.1 trigger — **except** when an `exceptions[]` entry serves as the external attestation for a `tier3_overrides[]` entry (per the solo-maintainer clause above). In that case the exception entry inherits the parent override's human-approval requirement — or, for solo maintainers, the evidence-anchor and no-self-approval rules apply to the exception entry as if it were the override itself. A sub-agent-only review of an attestation that substitutes for human approval reintroduces the agent-reviewing-agent loophole this section exists to close; the structural-guarantee removal must be witnessed independent of the agent chain regardless of which JSON array carries the load-bearing artifact.
+
+This preamble exists because §10's structural guarantees (auth on every route, no insecure hashes, validated boundaries) depend on configuration the agent freely edits. A reviewer who trusts the agent's "I added `/api/legacy/*` to `public_routes[]` because the legacy path doesn't have auth yet" without independent verification has voluntarily disabled §10.2.
+
+### 10.1 Parameterized queries only
+
+**Never concatenate or interpolate untrusted values into database queries.** Use parameterized queries or an ORM. SQL injection is one of the most-exploited bug classes in the field, and parameterization makes it impossible by construction.
+
+ORMs satisfy this rule when used as intended. Raw-query escape hatches (`prisma.$queryRawUnsafe`, `sequelize.query` without `replacements`, `gorm.Raw`, `db.Exec` with `fmt.Sprintf` arguments, etc.) require:
+
+1. An explicit `// SECURITY:` comment above the call explaining why a parameterized form won't work.
+2. A code reviewer signoff in the PR (sub-agent review per §4 is automatic for this class of change).
+
+### 10.2 Authentication on HTTP routes
+
+**All HTTP routes require authentication middleware** unless the path is explicitly listed in `debros.json.project.public_routes[]`.
+
+The public list is per-project — not hardcoded into this file — so adopters declare their own surface. Adding, removing, or editing a route in the public list is a §4 sub-agent review trigger (see §4.1) regardless of line count.
+
+**Invariant: an entry in `public_routes[]` removes an auth requirement and MUST therefore narrow the public surface as tightly as the use case allows.** Broad allowlist entries (root paths, naked wildcards, admin/internal prefixes, multi-segment wildcards) silently re-open large swaths of the API to anonymous traffic.
+
+**Enforcement scope.** The forbidden-patterns list below catches the syntactically-obvious dangerous entries. It does NOT catch subtler dangers — e.g., a single-segment public route that happens to expose a token endpoint with weak per-route auth, a public route whose handler delegates to a privileged downstream, or a public route that bypasses an audit log a private route would have invoked. The Tier-3 block `missing-auth-on-route` does NOT catch the broad-allowlist case at all — it fires on missing handlers, not on broad allowlist entries. Manual review per §4.1 is therefore the only enforcement mechanism for the cases the list doesn't enumerate.
+
+Worked example — the following entries are rejected by default and require an inline `// SECURITY:` justification AND a tracked `debros.json.compliance.exceptions[]` entry with reason and expiry:
+
+- The root path `/` — matches everything.
+- Naked wildcards `/*` or `*` — same problem.
+- Any prefix matching `/admin`, `/internal`, `/api/admin`, or `/api/internal` — admin / internal surfaces are never publicly reachable.
+- Any wildcard pattern broader than a single trailing segment (e.g. `/api/auth/*` is acceptable; `/api/*` is not).
+
+A reviewer encountering an entry that fails the invariant — whether or not it matches one of the worked examples — MUST reject the change.
+
+Typical starting set (copy into your `debros.json` and prune): `/health`, `/ready`, `/api/auth/login`, `/api/auth/register`, plus password-reset, email-verification, and OAuth-callback paths if applicable.
+
+### 10.3 Password storage
+
+**Password hashing MUST use one of:**
+
+- bcrypt with cost factor ≥12
+- argon2id with OWASP-recommended parameters
+- scrypt with N≥2^17
+
+**Forbidden for password hashing:** MD5, SHA-1, and the entire SHA-2 family. These are designed to be fast — exactly the wrong property for password storage; commodity GPUs can brute-force them for the bottom half of human-chosen passwords in seconds.
+
+> **Exemption (carve-out):** SHA-2 and SHA-3 remain required for HMAC, TLS session keys, JWT signing, file-integrity checks, and other non-password cryptographic uses. The prohibition in this rule applies **only to password storage.**
+
+If you're stuck with bcrypt and need to accept passwords longer than its 72-byte input limit, pre-hash with SHA-256 first and bcrypt the resulting hex digest. Record the choice in `debros.json.ai_agent_notes` so future contributors don't re-introduce the truncation bug.
+
+### 10.4 Validate at boundaries
+
+This rule concretizes §2.2.4. **All untrusted input crossing a process boundary MUST be validated against a schema before processing.**
+
+Boundaries include:
+- HTTP request bodies, query strings, and path parameters
+- Selected headers (Authorization, Content-Type — *not* every header)
+- Message-queue payloads
+- File-upload contents (alongside §10.7's MIME check)
+- External API responses
+
+Per-language tools (pick one per project, use it consistently):
+
+| Language | Tool |
+|---|---|
+| TypeScript / JavaScript | Zod |
+| Python | Pydantic |
+| Go | go-playground/validator (or hand-written struct validators) |
+| Rust | serde + validator |
+| Ruby | dry-validation |
+
+Validators run at the boundary. Internal code trusts the validated types and does not re-validate.
+
+**Multipart uploads.** Schema validators (Zod, Pydantic, etc.) typically operate on JSON. For multipart requests, schema-validate the non-file form fields (filename if any, declared MIME type, declared size, any sibling fields) using the same boundary validator at the boundary; file contents are validated by §10.7's content-sniffing MIME allowlist, not by the request-body schema. Treat the schema validation and the content sniff as complementary, not interchangeable — neither one alone is sufficient.
+
+### 10.5 Secrets management
+
+**Secrets never appear in source code, test fixtures, or example configs.** That means:
+
+- Production secrets come from environment variables or a secret manager (Vault, AWS Secrets Manager, GCP Secret Manager, etc.).
+- Local development uses a `.env` file that is in `.gitignore`.
+- The repo ships an `.env.example` with **placeholder values only** — never real secrets, not even expired ones.
+
+Compatible with §3.5: agents do not read `.env` or environment variables unless the user explicitly asks. Humans configure secrets; agents reference them by name only.
+
+A secret accidentally committed to git history is considered exposed even after removal — rotate the credential immediately, don't just `git rebase` the history away.
+
+**Invariant: a secret exposure in any past commit is treated as a present-day exposure** — the "considered exposed even after removal" rule applies retroactively to the entire git history, not only to commits made under DeBros rules. Adoption MUST therefore include a one-time scan of the full git history (`gitleaks git .` or equivalent), with rotation of every finding.
+
+**Enforcement scope.** CI scanning catches future commits; the adoption scan catches existing history at one moment in time. Neither catches history INTRODUCED after adoption by operations that rewrite or graft history. Any of the following operations MUST trigger a fresh `gitleaks git .` on the post-operation tree BEFORE pushing: `git filter-repo`, `git filter-branch`, `git replace --graft`, `git subtree add` (importing another repo's history), force-push that alters the merge-base, or resetting a tracked branch to a fork's tip. Note that `git filter-repo` is the canonical remediation for a previously-found leak — the post-remediation scan is the closing artifact of that remediation, not the rewrite itself.
+
+**Scan result as auditable artifact.** The post-rewrite scan output MUST be logged in the PR description as a structured artifact a reviewer can re-run independently. Required fields:
+
+- The post-rewrite tree's commit SHA (the exact tree the scan ran against).
+- The `gitleaks` version and exit code.
+- A one-line summary of findings ("no leaks found" or `<N> finding(s); each rotated, see exceptions[]`).
+
+This converts "I ran gitleaks and it was clean" from agent self-report into an auditable artifact in the same shape as §3.9's verification log. A reviewer with the SHA can re-run `gitleaks git .` against the same tree and confirm the agent's claim; a missing or malformed artifact is itself the failure case — the rewrite has not satisfied the rescan obligation.
+
+### 10.6 Security headers (HTTPS services)
+
+Every HTTPS response from a public HTTP service MUST include:
+
+| Header | Required value or constraint |
+|---|---|
+| `Content-Security-Policy` | with an explicit `frame-ancestors` directive |
+| `Strict-Transport-Security` | `max-age` ≥ 31536000 (one year) + `includeSubDomains` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` or stricter |
+
+`X-Frame-Options` is **not** required if CSP `frame-ancestors` is set — modern browsers ignore `X-Frame-Options` when both headers are present. Setting both with conflicting policies is undefined behavior; pick CSP and skip `X-Frame-Options`.
+
+HSTS is meaningful only over HTTPS — browsers ignore it on plain HTTP responses. If your service serves any HTTP at all, redirect to HTTPS unconditionally before the response carrying HSTS is emitted.
+
+**Invariant: every response served on behalf of this service — regardless of which component emits it — MUST carry the configured security headers.** The invariant scope covers BOTH application-emitted responses (helmet / equivalent middleware) AND edge-emitted responses (CDN, WAF, API gateway) that bear the service's host header. Wire the application's security-headers middleware before any rejecting middleware (auth, routing, rate-limit, parser-level size caps, schema validators); separately, configure the same header set at each edge component that can respond on the service's behalf (Cloudflare Transform Rules, AWS CloudFront response-headers policies, Nginx `add_header` directives, etc.).
+
+**Enforcement scope.** The in-application regression test matrix below covers the fallback path when no edge layer rejects first. When §10.8 places rate-limiting (or any rejection) at the edge, that edge layer is responsible for the headers — application middleware physically cannot reach it. Tests therefore require **two paths**: (1) the in-app matrix below, and (2) a production-path test that hits the edge directly and confirms the same header set on the edge-emitted response.
+
+**Edge configuration drift.** Edge configuration that satisfies this rule MUST be either:
+
+- (a) checked into version-controlled IaC in the repo (Terraform module, AWS CDK construct, Pulumi program, equivalent) so dashboard drift surfaces as a diff and triggers §4.1 review; OR
+- (b) covered by a scheduled CI job that runs the production-path header test independent of app commits (recommended cadence: at least daily, alerting on regression).
+
+The "configure in vendor dashboard once and rely on landing-time test" pattern is non-compliant — it satisfies the rule at one point in time and silently degrades when a dashboard edit (during an unrelated incident, a console-pinning experiment, an offboarding rotation) disables a header rule without a corresponding repo commit.
+
+In-app regression test matrix — each MUST ship the full header set:
+
+- `401` (unauthenticated request to a private route)
+- `404` (unknown route)
+- `429` (rate-limit rejection per §10.8 — fallback path)
+- `413` (over-size upload per §10.7)
+- `400` (schema-validation failure per §10.4)
+
+### 10.7 File uploads
+
+User-uploaded files MUST:
+
+1. **MIME-validated against an allowlist** (not a denylist), with the actual content sniffed — never trust the client-supplied `Content-Type` header.
+2. **Size-capped.** Default ceiling: **10 MB**. Larger limits require an explicit `debros.json.compliance.exceptions[]` entry with reason and expiry.
+3. **Stored outside the web root**, with the filename re-generated server-side (e.g. `<uuid>.<sniffed-extension>`). Never serve the file from a path that includes the user-supplied name.
+
+The first two close direct attack vectors. The third prevents path traversal, executable-uploads-served-as-HTML, and content-type confusion when files are served back.
+
+### 10.8 Rate limiting
+
+**Authentication endpoints MUST be rate-limited.** Baseline: **10 requests per minute per IP** for login, register, password-reset, and similar credential-handling routes. Production stacks may add stricter per-account quotas or progressive backoff on top.
+
+Apply the limit at the edge (CDN, WAF, API gateway) or in middleware before the handler runs. **Logging-only mode is not sufficient** — the limit must actually reject excess requests with `429 Too Many Requests`.
+
+**Invariant: the rate-limit's keying input MUST NOT be attacker-controllable.** A rate limit whose key (typically "the IP") can be rotated by an attacker offers no protection at all — every request hits a fresh bucket. Frameworks default to deriving the IP from `req.ip`, which trusts upstream `X-Forwarded-For` entries when `trust proxy` is enabled (required behind any load balancer or CDN for HSTS and scheme detection to work). Without an explicit allowlist of trusted proxy hops (or a fixed hop count from the right), the keying input is fully attacker-controlled.
+
+The fix MUST satisfy the invariant — typically by configuring the framework's trust-proxy setting with the exact upstream IPs/CIDRs that are trusted, OR by deriving the key from a separate header the load balancer attaches (and that the application validates). Tests MUST verify that rotating the `X-Forwarded-For` header does not yield additional buckets; a passing integration test on `req.ip` alone is insufficient.
+
+**Enforcement scope.** This rule covers HTTP rate limits keyed on IP-derived headers. Other rate-limit classes — WebSocket per-connection limits, queue-based limits (e.g., login attempts tracked in Redis per username), per-account quotas keyed on authenticated user-id — share the same "key must not be attacker-controllable" invariant but have different attack surfaces. The HTTP-IP case is the one this rule mechanically prescribes; for the other classes the invariant applies, but the worked example (trust-proxy pinning + `X-Forwarded-For` test) is HTTP-specific.
 
 ---
 

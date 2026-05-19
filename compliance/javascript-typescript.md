@@ -168,6 +168,49 @@ The full `strict: true` is the floor. Individual strictness flags above it are a
 - A pre-commit hook (husky / lefthook / git hooks) that runs the linter and formatter before commit
 - `git commit --no-verify` is forbidden (per DEBROS.md §3.4)
 
+### 8. Application-security libraries (DEBROS.md §10)
+
+For projects with HTTP / web surface, the following are the canonical
+library choices. Web-service patterns (middleware wiring, header policy,
+file-upload workflow) live in [`web-service.md`](web-service.md); this
+section covers JS/TS-specific package selection.
+
+#### Schema validation — §10.4
+
+- **`zod` ≥3.22.** TypeScript-first schemas, type inference end-to-end. Use `schema.parse()` in handlers that should throw on bad input; `schema.safeParse()` at boundaries where you want to shape the failure response yourself.
+- Validate at the boundary (the HTTP handler), not deep in business logic. Internal functions accept the inferred type (`z.infer<typeof Schema>`) and trust it.
+
+#### Password hashing — §10.3
+
+- **`@node-rs/argon2`** (preferred — native binding, fast, modern argon2id) OR
+- **`bcrypt`** (the npm package, NOT `bcryptjs` — the latter is pure-JS and ~30× slower, which hurts the user with no security benefit). Cost factor **≥12**.
+- **Forbidden for passwords:** `crypto.createHash('md5'|'sha1'|'sha256'|'sha512')`, `node:crypto`'s `pbkdf2` with fewer than 600_000 iterations, any in-house hash function.
+- bcrypt's 72-byte input limit: if you allow passwords longer than that, pre-hash with `crypto.createHash('sha256')` and bcrypt the hex digest. Note this in `debros.json.ai_agent_notes` so future contributors don't think the truncation is fine.
+
+#### Security headers — §10.6
+
+- **Express:** `helmet` ≥7.x with `contentSecurityPolicy` configured explicitly (the default is restrictive in ways that break inline tooling — set it yourself).
+- **Fastify:** `@fastify/helmet`.
+- **Next.js:** `next-safe` or a `next.config.js` `headers()` function.
+- Always set `frame-ancestors` in CSP. Do not also set `X-Frame-Options` (see §10.6 — they conflict).
+
+#### Rate limiting — §10.8
+
+- **`express-rate-limit`** for single-node deployments (in-memory store).
+- **`@upstash/ratelimit`** or **`rate-limiter-flexible`** with Redis for multi-node.
+- Apply specifically to `/api/auth/*` and any endpoint that sends email/SMS.
+
+#### File uploads — §10.7
+
+- **`multer`** with `limits.fileSize = 10 * 1024 * 1024` (10 MB).
+- **`file-type`** for content-sniffed MIME validation. Never trust `req.file.mimetype` — that's the client's claim, not the actual content.
+- Generate the storage path server-side: `${uuid()}.${extFromSniffedMime}`.
+
+#### Secret scanning — §10.5 + Tier-3 `hardcoded-secret`
+
+- Wire **`gitleaks`** or **`trufflehog`** into CI on every PR.
+- Husky/lefthook pre-commit hook with `gitleaks git --staged` catches secrets before they leave the dev's machine.
+
 ---
 
 ## File-by-file checklist
@@ -182,6 +225,12 @@ The full `strict: true` is the floor. Individual strictness flags above it are a
 | `tsconfig.json` with `strict: true` | repo root (TS only) | ✅ | — |
 | ESLint / Biome config | repo root | ✅ | — |
 | Pre-commit hook config | repo root | ✅ | — |
+| Zod schema for every HTTP handler boundary | source | ✅ if HTTP service | — |
+| bcrypt / argon2 in use; no MD5/SHA-* on password values | source | ✅ if user accounts | ✅ (`insecure-password-hash`) |
+| `helmet` / equivalent + explicit CSP | source | ✅ if HTTP service | — |
+| Rate-limit middleware on `/api/auth/*` | source | ✅ if HTTP service | — |
+| `multer` `limits` + `file-type` MIME sniff | source | ✅ if uploads | — |
+| `gitleaks` / `trufflehog` in CI | `.github/workflows/` | ✅ | ✅ (`hardcoded-secret`) |
 
 ---
 
