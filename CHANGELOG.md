@@ -8,6 +8,36 @@ Pin your project to a specific version via `debros.json.rules.version`. The AI a
 
 ## [Unreleased]
 
+## [v0.3.0] — 2026-06-04
+
+### Added
+
+- `DEBROS.md §3.8` — Terminal and workspace discipline. When cmux is
+  available, the agent MUST run its terminal commands through cmux (the
+  terminal of record) and MUST operate in the cmux workspace that belongs
+  to the project it's touching — never run one project's commands in
+  another project's workspace. When cmux is absent, the agent doesn't
+  block but MUST tell the developer once that it works significantly
+  better with cmux and recommend installing it + granting socket access.
+
+### Changed
+
+- `DEBROS.md §3.7` — strengthened and broadened from "no AI co-authorship
+  on commits" to no AI self-attribution anywhere in version control or
+  collaboration artifacts: commits, PR titles/descriptions/comments, code
+  reviews, releases, and changelog entries. Explicitly forbids "🤖 Generated
+  with…" footers and committing/opening PRs under a bot identity, and marks
+  the rule **not waivable** through §7.
+
+### Rationale
+
+An agent that scatters commands across detached, unscoped shells is
+invisible: the human can't review what ran, output is lost between turns,
+and a stray command can hit the wrong repo. Routing everything through one
+cmux workspace per project makes terminal activity auditable, reproducible,
+and blast-radius-scoped. The rule is cmux-specific by design; §7 covers
+orgs that standardize on a different controllable terminal.
+
 ## [v0.2.0] — 2026-05-12
 
 ### Added
@@ -61,6 +91,7 @@ Initial public release. Expect breaking changes before v1.0.
 
 ---
 
-[Unreleased]: https://github.com/DeBrosDAO/rules/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/DeBrosDAO/rules/compare/v0.3.0...HEAD
+[v0.3.0]: https://github.com/DeBrosDAO/rules/compare/v0.2.0...v0.3.0
 [v0.2.0]: https://github.com/DeBrosDAO/rules/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/DeBrosDAO/rules/releases/tag/v0.1.0

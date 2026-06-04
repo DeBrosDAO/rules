@@ -243,17 +243,32 @@ When the agent applies a hotfix, workaround, or accepts a known-incomplete solut
 
 ### 3.7 No AI co-authorship on commits
 
-The agent MUST NOT attribute itself in git commits. Ever. This includes:
+The agent MUST NOT attribute, credit, sign, or advertise itself anywhere in version control or its collaboration artifacts. Ever. This is absolute: it covers commits, pull requests, code reviews, and releases, and it holds no matter what the AI tool injects by default. **This rule is not waivable through §7** — there is no legitimate reason to put an AI's name in version history.
+
+Forbidden, without exception:
 
 - `Co-Authored-By: Claude <noreply@anthropic.com>` trailers
 - `Co-Authored-By: Cursor <...>` trailers
 - `Co-Authored-By: AnBuddy <...>` trailers
-- `--author="<AI name> <...>"` overrides
-- Any other AI attribution in commit metadata, PR descriptions, or release notes
+- Any `Co-Authored-By` trailer naming an AI tool, model, or agent
+- `--author="<AI name> <...>"` overrides, or committing/pushing/opening a PR under an AI identity or bot account
+- `🤖 Generated with Claude Code` / "Generated with `<tool>`" / "Made with `<AI>`" footers in commit messages, PR titles, PR descriptions, or release notes
+- AI signatures, sign-offs, or self-credit in PR descriptions, PR comments, code-review remarks, or changelog entries
+- Any other promotional or attributive mention of the AI tool in version-control or collaboration metadata
 
-Commits are attributed to the human who reviewed and approved them. The agent's contribution lives in the chat transcript and the PR description (when meaningful) — it does NOT belong in git history. This rule applies regardless of the AI tool's default behavior; if the tool injects an attribution trailer by default, the agent removes it before committing.
+Commits and PRs are attributed solely to the human who reviewed and approved them. The agent's contribution lives in the chat transcript — it does NOT belong in git history or the PR. This applies regardless of the AI tool's default behavior; if the tool injects an attribution or "generated with" trailer by default, the agent strips it before committing or opening the PR.
 
 Rationale: git history is the human record of decisions. Polluting it with AI attribution makes `git blame` noisier, complicates legal/audit reviews, and signals nothing useful (everyone uses AI tools now). When you `git log`, you want to see who decided to ship this change, not which model wrote the first draft.
+
+### 3.8 Terminal and workspace discipline
+
+**Rule:** When [cmux](https://cmux.com) is available on the machine, the agent MUST run its terminal commands through cmux — not a detached shell, a separate emulator, or an out-of-band process. cmux is the terminal of record: it gives both the agent and the human one inspectable view of every command, its output, and the long-running processes it spawns. Scattering commands across invisible shells is forbidden — the human can't see what ran, output is lost between turns, and a stray command can hit the wrong project.
+
+**Rule:** The agent MUST operate in the cmux workspace that belongs to the project it is touching. Before running commands, confirm the active workspace matches the repo (`cmux current-workspace`, `cmux tree`). Never run one project's commands in another project's workspace — workspace isolation is what keeps a `pnpm dev`, a migration, or a deploy from firing against the wrong repo. If no workspace exists for the project yet, create or switch to one before working.
+
+**When cmux is not installed:** the agent does NOT block — it works in whatever terminal is available. But it MUST tell the developer, once per session, that it works significantly better with cmux: full read/write visibility into every tab, per-project workspace isolation, and the ability to drive and monitor long-running processes (dev servers, log tails, test watchers, deploys). Recommend installing it (<https://cmux.com>) and granting the agent socket access, then continue the task.
+
+Rationale: an agent driving an invisible, unscoped shell is an audit and blast-radius problem — the human can't review what executed, and the wrong-project failure mode is one `cd` away. One cmux workspace per project makes the agent's terminal activity visible, reproducible, and scoped to the right repo. This rule is cmux-specific by design; orgs that standardize on a different controllable terminal may adapt it per §7, but the requirement — *one visible, project-scoped terminal of record* — holds.
 
 ---
 
