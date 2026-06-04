@@ -8,6 +8,26 @@ Pin your project to a specific version via `debros.json.rules.version`. The AI a
 
 ## [Unreleased]
 
+## [v0.5.0] — 2026-06-04
+
+### Added
+
+- `DEBROS.md §3.9` — Committing and pushing are the human's call. By
+  default the agent does NOT write to version control: it makes changes,
+  summarizes the diff, and stops. It runs `git commit`/`push`/`tag`,
+  cherry-pick, merge, or PR actions ONLY when the human explicitly asks
+  for that specific action in the moment — a general "work on X" is never
+  standing permission, and approval for one push does not carry to the
+  next. Deploy branches (`staging`, `production`) are especially off-limits
+  to the agent because pushing them fires a deploy.
+
+### Rationale
+
+Agent-initiated commits get entangled with the human's in-progress working
+tree, and an unscoped push to a deploy branch triggers a deploy nobody
+asked for. Keeping the commit/push boundary in human hands keeps git
+history intentional and deploys deliberate.
+
 ## [v0.4.0] — 2026-06-04
 
 ### Added
@@ -111,7 +131,8 @@ Initial public release. Expect breaking changes before v1.0.
 
 ---
 
-[Unreleased]: https://github.com/DeBrosDAO/rules/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/DeBrosDAO/rules/compare/v0.5.0...HEAD
+[v0.5.0]: https://github.com/DeBrosDAO/rules/compare/v0.4.0...v0.5.0
 [v0.4.0]: https://github.com/DeBrosDAO/rules/compare/v0.3.0...v0.4.0
 [v0.3.0]: https://github.com/DeBrosDAO/rules/compare/v0.2.0...v0.3.0
 [v0.2.0]: https://github.com/DeBrosDAO/rules/compare/v0.1.0...v0.2.0

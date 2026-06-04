@@ -272,6 +272,14 @@ Rationale: git history is the human record of decisions. Polluting it with AI at
 
 Rationale: an agent driving an invisible, unscoped shell is an audit and blast-radius problem — the human can't review what executed, and the wrong-project failure mode is one `cd` away. One cmux workspace per project makes the agent's terminal activity visible, reproducible, and scoped to the right repo. This rule is cmux-specific by design; orgs that standardize on a different controllable terminal may adapt it per §7, but the requirement — *one visible, project-scoped terminal of record* — holds.
 
+### 3.9 Committing and pushing are the human's call
+
+**Rule:** By default the agent does NOT write to version control. It makes changes in the working tree, summarizes the diff, and stops — the human reviews and commits. The agent runs `git commit`, `git push`, `git tag`, cherry-pick, merge, or opens/merges a PR ONLY when the human explicitly asks for that specific action in that moment. A general "work on X" or "fix Y" is never standing permission to commit or push it, and approval for one commit/push does not carry to the next.
+
+**Deploy branches:** treat `staging`, `production`, and any deploy-wired branch as especially off-limits — the agent never commits, pushes, cherry-picks, or merges onto them on its own, because that fires a deploy. Those land through the human.
+
+Rationale: agent-initiated commits get entangled with the human's in-progress working tree, and an unscoped push to a deploy branch triggers a deploy nobody asked for. Git history stays intentional and deploys stay deliberate when the commit/push boundary lives with the human.
+
 ---
 
 ## 4. Sub-Agent Review
