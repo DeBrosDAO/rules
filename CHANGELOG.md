@@ -8,6 +8,26 @@ Pin your project to a specific version via `debros.json.rules.version`. The AI a
 
 ## [Unreleased]
 
+## [v0.4.0] — 2026-06-04
+
+### Added
+
+- `DEBROS.md §3.8` — multi-agent surface isolation. When more than one
+  agent may run in the same cmux instance, each agent MUST keep its
+  terminal work in its own task-named surface (`$CMUX_SURFACE_ID`, or a
+  new one via `cmux new-surface` + `cmux rename-tab`), and MUST NOT run
+  work in or `cmux send` into a surface another agent owns. Before sending
+  to a surface it did not create, the agent checks `cmux tree` /
+  `cmux list-pane-surfaces` to confirm it's idle and unclaimed.
+
+### Rationale
+
+Multiple agents sharing one cmux surface interleave their output and let
+one agent kill or misread another's process (a build, a dev server, a test
+watcher). One task-named surface per agent makes concurrent agent work
+collision-free and legible to the human watching — you can see at a glance
+which agent is doing what.
+
 ## [v0.3.0] — 2026-06-04
 
 ### Added
@@ -91,7 +111,8 @@ Initial public release. Expect breaking changes before v1.0.
 
 ---
 
-[Unreleased]: https://github.com/DeBrosDAO/rules/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/DeBrosDAO/rules/compare/v0.4.0...HEAD
+[v0.4.0]: https://github.com/DeBrosDAO/rules/compare/v0.3.0...v0.4.0
 [v0.3.0]: https://github.com/DeBrosDAO/rules/compare/v0.2.0...v0.3.0
 [v0.2.0]: https://github.com/DeBrosDAO/rules/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/DeBrosDAO/rules/releases/tag/v0.1.0
