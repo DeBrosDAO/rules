@@ -1,0 +1,62 @@
+version: 2
+
+project_name: rules
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: rules
+    main: .
+    binary: rules
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: rules
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# Publishes a `rules` formula to the DeBros Homebrew tap so users can
+# `brew install debros/tap/rules`. The tap lives on GitHub at
+# github.com/DeBrosDAO/homebrew-tap. If the tap is hosted on the gitbros host
+# instead, set `repository.url_template` / clone the tap there — the standard
+# GitHub config below is the portable default.
+brews:
+  - name: rules
+    repository:
+      owner: DeBrosDAO
+      name: homebrew-tap
+      branch: main
+    directory: Formula
+    homepage: https://github.com/DeBrosDAO/rules
+    description: Install DeBros engineering rules and skills into any project for Claude Code
+    license: MIT
+    install: |
+      bin.install "rules"
+    test: |
+      system "#{bin}/rules", "version"
